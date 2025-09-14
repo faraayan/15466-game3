@@ -1,6 +1,6 @@
-# (TODO: your game's title)
+# Toasty campfire
 
-Author: (TODO: your name)
+Author: Fara Yan
 
 Design: (TODO: In two sentences or fewer, describe what is new and interesting about your game.)
 

@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "*.slf": "sasylf",
+        ".project": "html",
+        "list": "cpp",
+        "__node_handle": "cpp",
+        "deque": "cpp",
+        "locale": "cpp",
+        "__bit_reference": "cpp",
+        "stdexcept": "cpp"
+    }
+}

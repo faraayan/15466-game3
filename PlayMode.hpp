@@ -23,19 +23,20 @@ struct PlayMode : Mode {
 	struct Button {
 		uint8_t downs = 0;
 		uint8_t pressed = 0;
-	} left, right, down, up;
+	} left, right, down, up, r, f;
+
+	float touching_seconds = 0.0f;
+	float goal_touched_seconds = 0.0f;
 
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
 
-	//hexapod leg to wobble:
-	Scene::Transform *hip = nullptr;
-	Scene::Transform *upper_leg = nullptr;
-	Scene::Transform *lower_leg = nullptr;
-	glm::quat hip_base_rotation;
-	glm::quat upper_leg_base_rotation;
-	glm::quat lower_leg_base_rotation;
-	float wobble = 0.0f;
+	Scene::Transform *skewer_root = nullptr;
+	Scene::Transform *marshmallow_root = nullptr;
+	Scene::Transform *fire_root = nullptr;
+
+	float fire_timer = 0.0f;
+	bool fire_visible = false;
 
 	glm::vec3 get_leg_tip_position();
 
