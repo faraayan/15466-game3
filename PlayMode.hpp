@@ -33,18 +33,22 @@ struct PlayMode : Mode {
 
 	Scene::Transform *skewer_root = nullptr;
 	Scene::Transform *marshmallow_root = nullptr;
+	Scene::Transform *marshmallow_golden_root = nullptr;
+	Scene::Transform *marshmallow_burnt_root = nullptr;
+	Scene::Transform *marshmallow_almost_root = nullptr;
 	Scene::Transform *fire_root = nullptr;
 
 	float fire_timer = 0.0f;
 	bool fire_visible = false;
-
-	glm::vec3 get_leg_tip_position();
+	
+	// curr marshmallow position
+	glm::vec3 marshmallow_pos;
+	glm::quat marshmallow_rot;
+	glm::vec3 marshmallow_scale;
 
 	//music coming from the tip of the leg (as a demonstration):
-	std::shared_ptr< Sound::PlayingSample > leg_tip_loop;
-
-	//car honk sound:
-	std::shared_ptr< Sound::PlayingSample > honk_oneshot;
+	std::shared_ptr< Sound::PlayingSample > fire_loop;
+	std::shared_ptr< Sound::PlayingSample > background_loop;
 	
 	//camera:
 	Scene::Camera *camera = nullptr;

@@ -27,6 +27,27 @@ Load<MeshBuffer> marshmallow_meshes(LoadTagDefault, []() -> MeshBuffer const *
 	marshmallow_vao_for_lit = ret->make_vao_for_program(lit_color_texture_program->program);
 	return ret; });
 
+GLuint marshmallow_golden_vao_for_lit = 0;
+Load<MeshBuffer> marshmallow_golden_meshes(LoadTagDefault, []() -> MeshBuffer const *
+										   {
+	MeshBuffer const *ret = new MeshBuffer(data_path("marshmallow-golden.pnct"));
+	marshmallow_golden_vao_for_lit = ret->make_vao_for_program(lit_color_texture_program->program);
+	return ret; });
+
+GLuint marshmallow_burnt_vao_for_lit = 0;
+Load<MeshBuffer> marshmallow_burnt_meshes(LoadTagDefault, []() -> MeshBuffer const *
+										  {
+	MeshBuffer const *ret = new MeshBuffer(data_path("marshmallow-burnt.pnct"));
+	marshmallow_burnt_vao_for_lit = ret->make_vao_for_program(lit_color_texture_program->program);
+	return ret; });
+
+GLuint marshmallow_almost_vao_for_lit = 0;
+Load<MeshBuffer> marshmallow_almost_meshes(LoadTagDefault, []() -> MeshBuffer const *
+										   {
+	MeshBuffer const *ret = new MeshBuffer(data_path("marshmallow-almost.pnct"));
+	marshmallow_almost_vao_for_lit = ret->make_vao_for_program(lit_color_texture_program->program);
+	return ret; });
+
 GLuint ground_vao_for_lit = 0;
 Load<MeshBuffer> ground_meshes(LoadTagDefault, []() -> MeshBuffer const *
 							   {
@@ -69,14 +90,29 @@ Load<Scene> campfire_scene(LoadTagDefault, []() -> Scene const *
 	load_scene("fire.scene",   &*fire_meshes,   fire_vao_for_lit);
 	load_scene("ground.scene", &*ground_meshes, ground_vao_for_lit);
 	load_scene("marshmallow.scene", &*marshmallow_meshes, marshmallow_vao_for_lit);
+	load_scene("marshmallow-golden.scene", &*marshmallow_golden_meshes, marshmallow_golden_vao_for_lit);
+	load_scene("marshmallow-burnt.scene", &*marshmallow_burnt_meshes, marshmallow_burnt_vao_for_lit);
+	load_scene("marshmallow-almost.scene", &*marshmallow_almost_meshes, marshmallow_almost_vao_for_lit);
 
 	return campfire; });
 
-Load<Sound::Sample> dusty_floor_sample(LoadTagDefault, []() -> Sound::Sample const *
-									   { return new Sound::Sample(data_path("dusty-floor.opus")); });
+Load<Sound::Sample> fire_crackle_sample(LoadTagDefault, []() -> Sound::Sample const *
+										{ return new Sound::Sample(data_path("fire.wav")); });
 
-Load<Sound::Sample> honk_sample(LoadTagDefault, []() -> Sound::Sample const *
-								{ return new Sound::Sample(data_path("honk.wav")); });
+Load<Sound::Sample> sizzle_sample(LoadTagDefault, []() -> Sound::Sample const *
+								  { return new Sound::Sample(data_path("sizzle.wav")); });
+
+Load<Sound::Sample> background_sample(LoadTagDefault, []() -> Sound::Sample const *
+									  { return new Sound::Sample(data_path("song.wav")); });
+
+Load<Sound::Sample> win_sample(LoadTagDefault, []() -> Sound::Sample const *
+							   { return new Sound::Sample(data_path("win.wav")); });
+
+Load<Sound::Sample> lose_sample(LoadTagDefault, []() -> Sound::Sample const *
+								{ return new Sound::Sample(data_path("lose.wav")); });
+
+Load<Sound::Sample> almost_sample(LoadTagDefault, []() -> Sound::Sample const *
+								  { return new Sound::Sample(data_path("almost.wav")); });
 
 PlayMode::PlayMode() : scene(*campfire_scene)
 {
@@ -86,12 +122,21 @@ PlayMode::PlayMode() : scene(*campfire_scene)
 			skewer_root = &transform;
 		else if (transform.name == "marshmallow_root")
 			marshmallow_root = &transform;
+		else if (transform.name == "marshmallow_golden_root")
+			marshmallow_golden_root = &transform;
+		else if (transform.name == "marshmallow_almost_root")
+			marshmallow_almost_root = &transform;
+		else if (transform.name == "marshmallow_burnt_root")
+			marshmallow_burnt_root = &transform;
 		else if (transform.name == "fire_root")
 			fire_root = &transform;
 	}
 
-	// Goal touched seconds
-	goal_touched_seconds = 10.0f + 5.0f * (float(rand()) / float(RAND_MAX));
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_real_distribution<float> distrib(7.0f, 15.0f);
+	goal_touched_seconds = distrib(gen);
+	std::cout << "Goal touched seconds:" << goal_touched_seconds << std::endl;
 
 	// Set fire to random initial position
 	if (fire_root)
@@ -104,6 +149,10 @@ PlayMode::PlayMode() : scene(*campfire_scene)
 		throw std::runtime_error("skewer_root not found.");
 	if (marshmallow_root == nullptr)
 		throw std::runtime_error("marshmallow_root not found.");
+	if (marshmallow_golden_root == nullptr)
+		throw std::runtime_error("marshmallow_golden_root not found.");
+	if (marshmallow_burnt_root == nullptr)
+		throw std::runtime_error("marshmallow_burnt_root not found.");
 	if (fire_root == nullptr)
 		throw std::runtime_error("fire_root not found.");
 
@@ -114,7 +163,8 @@ PlayMode::PlayMode() : scene(*campfire_scene)
 
 	// start music loop playing:
 	//  (note: position will be over-ridden in update())
-	// leg_tip_loop = Sound::loop_3D(*dusty_floor_sample, 1.0f, get_leg_tip_position(), 10.0f);
+	background_loop = Sound::loop_3D(*background_sample, 0.5f, skewer_root->position, 10.0f);
+	fire_loop = Sound::loop_3D(*fire_crackle_sample, 3.0f, fire_root->position, 1.0f);
 }
 
 PlayMode::~PlayMode()
@@ -215,12 +265,44 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 void PlayMode::update(float elapsed)
 {
 	// Track num seconds marshmallow touches fire
-	if (marshmallow_root && fire_root && fire_visible)
+	static std::shared_ptr<Sound::PlayingSample> sizzle_sound = nullptr;
+	bool is_touching_fire = false;
+	if (fire_visible)
 	{
 		float dist = glm::distance(marshmallow_root->position, fire_root->position);
-		if (dist < 5.0f)
+		float dist2 = glm::distance(marshmallow_golden_root->position, fire_root->position);
+		float dist3 = glm::distance(marshmallow_burnt_root->position, fire_root->position);
+		float dist4 = glm::distance(marshmallow_almost_root->position, fire_root->position);
+		if (dist < 5.0f || dist2 < 5.0f || dist3 < 5.0f || dist4 < 5.0f)
 		{
+
 			touching_seconds += elapsed;
+			is_touching_fire = true;
+		}
+		else
+		{
+			is_touching_fire = false;
+		}
+	}
+	else
+	{
+		is_touching_fire = false;
+	}
+
+	// Sizzle sound logic
+	if (is_touching_fire)
+	{
+		if (sizzle_sound == nullptr || sizzle_sound->stopped)
+		{
+			sizzle_sound = Sound::play_3D(*sizzle_sample, 0.2f, marshmallow_root->position);
+		}
+	}
+	else
+	{
+		if (sizzle_sound != nullptr && !sizzle_sound->stopped)
+		{
+			sizzle_sound->stop();
+			sizzle_sound = nullptr;
 		}
 	}
 
@@ -297,10 +379,70 @@ void PlayMode::update(float elapsed)
 	skewer_root->position.z = new_z;
 
 	// Make marshmallow follow skewer with offset
-	if (marshmallow_root && skewer_root)
+	glm::vec3 follow_pos = skewer_root->position + skewer_root->rotation * glm::vec3(0, 0, 2.0f);
+	glm::quat follow_rot = skewer_root->rotation;
+	static bool played_win = false;
+	static bool played_lose = false;
+	static bool played_almost = false;
+
+	if (touching_seconds < goal_touched_seconds - 2.0f)
 	{
-		marshmallow_root->position = skewer_root->position + skewer_root->rotation * glm::vec3(0, 0, 2.0f);
-		marshmallow_root->rotation = skewer_root->rotation;
+		// Show normal marshmallow
+		marshmallow_root->position = follow_pos;
+		marshmallow_root->rotation = follow_rot;
+		marshmallow_almost_root->position = glm::vec3(1000.0f);
+		marshmallow_golden_root->position = glm::vec3(1000.0f);
+		marshmallow_burnt_root->position = glm::vec3(1000.0f);
+		played_win = false;
+		played_lose = false;
+		played_almost = false;
+	}
+	else if (touching_seconds < goal_touched_seconds)
+	{
+		// Show almost marshmallow
+		marshmallow_almost_root->position = follow_pos;
+		marshmallow_almost_root->rotation = follow_rot;
+		marshmallow_root->position = glm::vec3(1000.0f);
+		marshmallow_golden_root->position = glm::vec3(1000.0f);
+		marshmallow_burnt_root->position = glm::vec3(1000.0f);
+		played_win = false;
+		played_lose = false;
+		if (!played_almost)
+		{
+			Sound::play_3D(*almost_sample, 0.8f, follow_pos);
+			played_almost = true;
+		}
+	}
+	else if (touching_seconds < goal_touched_seconds + 1.0f)
+	{
+		// Show golden marshmallow
+		marshmallow_golden_root->position = follow_pos;
+		marshmallow_golden_root->rotation = follow_rot;
+		marshmallow_root->position = glm::vec3(1000.0f);
+		marshmallow_almost_root->position = glm::vec3(1000.0f);
+		marshmallow_burnt_root->position = glm::vec3(1000.0f);
+		if (!played_win)
+		{
+			Sound::play_3D(*win_sample, 0.8f, follow_pos);
+			played_win = true;
+		}
+		played_lose = false;
+		played_almost = false;
+	}
+	else
+	{
+		// Show burnt marshmallow
+		marshmallow_burnt_root->position = follow_pos;
+		marshmallow_burnt_root->rotation = follow_rot;
+		marshmallow_root->position = glm::vec3(1000.0f);
+		marshmallow_golden_root->position = glm::vec3(1000.0f);
+		marshmallow_almost_root->position = glm::vec3(1000.0f);
+		if (!played_lose)
+		{
+			Sound::play_3D(*lose_sample, 0.8f, follow_pos);
+			played_lose = true;
+		}
+		played_almost = false;
 	}
 
 	// Set camera to follow skewer
@@ -337,7 +479,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size)
 	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
 	glUseProgram(0);
 
-	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
+	glClearColor(0.05f, 0.05f, 0.2f, 1.0f);
 	glClearDepth(1.0f); // 1.0 is actually the default value to clear the depth buffer to, but FYI you can change it.
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -356,8 +498,23 @@ void PlayMode::draw(glm::uvec2 const &drawable_size)
 			0.0f, 0.0f, 0.0f, 1.0f));
 
 		constexpr float H = 0.09f;
-		char buf[32];
-		snprintf(buf, sizeof(buf), "Toasted: %.1fs, Goal: %.1fs", touching_seconds, goal_touched_seconds);
+		char buf[64];
+		if (touching_seconds < goal_touched_seconds - 2.0f)
+		{
+			snprintf(buf, sizeof(buf), "Toasted: %.1fs", touching_seconds);
+		}
+		else if (touching_seconds < goal_touched_seconds)
+		{
+			snprintf(buf, sizeof(buf), "Toasted: %.1fs - getting toasty..", touching_seconds);
+		}
+		else if (touching_seconds < goal_touched_seconds + 1.0f)
+		{
+			snprintf(buf, sizeof(buf), "Toasted: %.1fs - perfection!! :)", touching_seconds);
+		}
+		else
+		{
+			snprintf(buf, sizeof(buf), "Toasted: %.1fs -  noOO it's burnt :(", touching_seconds);
+		}
 		std::string touch_text = buf;
 		lines.draw_text(touch_text,
 						glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
@@ -371,9 +528,3 @@ void PlayMode::draw(glm::uvec2 const &drawable_size)
 	}
 	GL_ERRORS();
 }
-
-// glm::vec3 PlayMode::get_leg_tip_position()
-// {
-// 	// the vertex position here was read from the model in blender:
-// 	return glm::vec4(-1.26137f, -11.861f, 0.0f, 1.0f);
-// }
