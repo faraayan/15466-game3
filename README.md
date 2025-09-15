@@ -9,8 +9,8 @@ Design: Gather around the campfire and roast marshmallows! Move your skewer clos
 ### How To Play:
 
 Controls:
-* A / D – Rotate left or right
-* W / S – Move forward or backward in the direction you’re facing
+* A / D – Rotate left and right
+* W / S – Move forward and backward in the direction you’re facing
 * Press Space to restart the game
 
 Play:
