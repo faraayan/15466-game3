@@ -114,6 +114,9 @@ Load<Sound::Sample> lose_sample(LoadTagDefault, []() -> Sound::Sample const *
 Load<Sound::Sample> almost_sample(LoadTagDefault, []() -> Sound::Sample const *
 								  { return new Sound::Sample(data_path("almost.wav")); });
 
+Load<Sound::Sample> move_sample(LoadTagDefault, []() -> Sound::Sample const *
+								{ return new Sound::Sample(data_path("move.wav")); });
+
 PlayMode::PlayMode() : scene(*campfire_scene)
 {
 	for (auto &transform : scene.transforms)
@@ -134,16 +137,12 @@ PlayMode::PlayMode() : scene(*campfire_scene)
 
 	std::random_device rd;
 	std::mt19937 gen(rd());
-	std::uniform_real_distribution<float> distrib(7.0f, 15.0f);
-	goal_touched_seconds = distrib(gen);
-	std::cout << "Goal touched seconds:" << goal_touched_seconds << std::endl;
+	std::uniform_real_distribution<float> goal_seconds_dist(7.0f, 15.0f);
+	goal_touched_seconds = goal_seconds_dist(gen);
 
-	// Set fire to random initial position
-	if (fire_root)
-	{
-		fire_root->position.x = -20.0f + 40.0f * (float(rand()) / float(RAND_MAX));
-		fire_root->position.y = -20.0f + 40.0f * (float(rand()) / float(RAND_MAX));
-	}
+	std::uniform_real_distribution<float> fire_dist(-20.0f, 20.0f);
+	fire_root->position.x = fire_dist(gen);
+	fire_root->position.y = fire_dist(gen);
 
 	if (skewer_root == nullptr)
 		throw std::runtime_error("skewer_root not found.");
@@ -153,6 +152,8 @@ PlayMode::PlayMode() : scene(*campfire_scene)
 		throw std::runtime_error("marshmallow_golden_root not found.");
 	if (marshmallow_burnt_root == nullptr)
 		throw std::runtime_error("marshmallow_burnt_root not found.");
+	if (marshmallow_almost_root == nullptr)
+		throw std::runtime_error("marshmallow_almost_root not found.");
 	if (fire_root == nullptr)
 		throw std::runtime_error("fire_root not found.");
 
@@ -217,13 +218,12 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			f.pressed = true;
 			return true;
 		}
-
-		// else if (evt.key.key == SDLK_SPACE)
-		// {
-		// 	if (honk_oneshot)
-		// 		honk_oneshot->stop();
-		// 	honk_oneshot = Sound::play_3D(*honk_sample, 0.3f, glm::vec3(4.6f, -7.8f, 6.9f)); // hardcoded position of front of car, from blender
-		// }
+		if (evt.key.key == SDLK_SPACE)
+		{
+			Sound::stop_all_samples();
+			Mode::set_current(std::make_shared<PlayMode>());
+			return true;
+		}
 	}
 	else if (evt.type == SDL_EVENT_KEY_UP)
 	{
@@ -258,7 +258,6 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 			return true;
 		}
 	}
-
 	return false;
 }
 
@@ -310,11 +309,10 @@ void PlayMode::update(float elapsed)
 	fire_timer += elapsed;
 	if (fire_visible)
 	{
-		if (fire_timer >= 10.0f)
+		if (fire_timer >= 7.0f)
 		{
 			fire_visible = false;
 			fire_timer = 0.0f;
-			// Hide fire away
 			fire_root->position = glm::vec3(1000.0f, 1000.0f, fire_root->position.z);
 		}
 	}
@@ -324,9 +322,21 @@ void PlayMode::update(float elapsed)
 		{
 			fire_visible = true;
 			fire_timer = 0.0f;
-			// Random position in (-20, 20)
-			fire_root->position.x = -20.0f + 40.0f * (float(rand()) / float(RAND_MAX));
-			fire_root->position.y = -20.0f + 40.0f * (float(rand()) / float(RAND_MAX));
+			static std::random_device rd;
+			static std::mt19937 gen(rd());
+			static std::uniform_real_distribution<float> fire_dist(-20.0f, 20.0f);
+			fire_root->position.x = fire_dist(gen);
+			fire_root->position.y = fire_dist(gen);
+
+			// only play louder if we're still trying to get more fire time
+			if (touching_seconds < goal_touched_seconds)
+			{
+				Sound::play_3D(*move_sample, 0.5f, fire_root->position);
+			}
+			else
+			{
+				Sound::play_3D(*move_sample, 0.1f, fire_root->position);
+			}
 		}
 	}
 
@@ -479,7 +489,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size)
 	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
 	glUseProgram(0);
 
-	glClearColor(0.05f, 0.05f, 0.2f, 1.0f);
+	glClearColor(0.02f, 0.02f, 0.08f, 1.0f);
 	glClearDepth(1.0f); // 1.0 is actually the default value to clear the depth buffer to, but FYI you can change it.
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

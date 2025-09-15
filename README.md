@@ -2,14 +2,18 @@
 
 Author: Fara Yan
 
-Design: (TODO: In two sentences or fewer, describe what is new and interesting about your game.)
+Design: Gather around the campfire and roast marshmallows! Move your skewer close to the fire to toast it.
 
-Screen Shot:
+![Screen Shot](./dist/screenshot.png)
 
-![Screen Shot](screenshot.png)
+### How To Play:
 
-How To Play:
+Controls:
+* A / D – Rotate left or right
+* W / S – Move forward or backward in the direction you’re facing
+* Press Space to restart the game
 
-(TODO: describe the controls and (if needed) goals/strategy.)
+Play:
+Fires will randomly appear around the campfire for a few seconds. You have a marshmallow and each marshmallow has its own amount of time needed to toast to perfection (between 7–15 seconds). Hold your marshmallow over the fire to toast it. Try to reach a perfect golden texture! If you go over this toasty limit, you might burn your marshmallow :(, so beware!
 
 This game was built with [NEST](NEST.md).

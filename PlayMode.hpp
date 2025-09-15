@@ -9,6 +9,7 @@
 #include <deque>
 
 struct PlayMode : Mode {
+	void restart_game();
 	PlayMode();
 	virtual ~PlayMode();
 
